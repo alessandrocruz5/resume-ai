@@ -11,6 +11,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       description: body.description || null,
       bullets: body.bullets ?? [],
       url: body.url || null,
+      status: body.status || null,
     },
   })
 

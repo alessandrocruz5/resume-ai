@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getOrCreateResume } from '@/lib/resume'
-import { ai, OLLAMA_MODEL, RESUME_WRITER_SYSTEM_PROMPT, parseJSON } from '@/lib/anthropic'
+import { RESUME_WRITER_SYSTEM_PROMPT, callAI } from '@/lib/anthropic'
 import { GapAnalysisResult } from '@/types/jobs'
 
 export async function POST(req: NextRequest) {
@@ -39,16 +39,14 @@ Respond with this JSON object and nothing else:
   ]
 }`
 
-  const completion = await ai.chat.completions.create({
-    model: OLLAMA_MODEL,
-    messages: [
+  try {
+    const result = await callAI<GapAnalysisResult>([
       { role: 'system', content: RESUME_WRITER_SYSTEM_PROMPT },
       { role: 'user', content: prompt },
-    ],
-  })
-
-  const text = completion.choices[0].message.content ?? ''
-  const result = parseJSON<GapAnalysisResult>(text)
-
-  return NextResponse.json(result)
+    ])
+    return NextResponse.json(result)
+  } catch (e) {
+    console.error('[analyze-gaps]', e)
+    return NextResponse.json({ error: 'AI returned an unexpected response. Please try again.' }, { status: 502 })
+  }
 }

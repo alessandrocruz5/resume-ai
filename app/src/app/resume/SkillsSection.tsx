@@ -11,6 +11,7 @@ export function SkillsSection({ initialData }: Props) {
   const [skills, setSkills] = useState<Skill[]>(initialData)
   const [newName, setNewName] = useState('')
   const [newCategory, setNewCategory] = useState('General')
+  const [customCategory, setCustomCategory] = useState('')
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -21,15 +22,22 @@ export function SkillsSection({ initialData }: Props) {
     setAdding(true)
     setError(null)
     try {
+      const resolvedCategory = newCategory === '__new__'
+        ? (customCategory.trim() || 'General')
+        : newCategory
       const res = await fetch('/api/resume/skills', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName.trim(), category: newCategory.trim() || 'General' }),
+        body: JSON.stringify({ name: newName.trim(), category: resolvedCategory }),
       })
       if (!res.ok) throw new Error()
       const skill: Skill = await res.json()
       setSkills((s) => [...s, skill])
       setNewName('')
+      if (newCategory === '__new__') {
+        setNewCategory(resolvedCategory)
+        setCustomCategory('')
+      }
     } catch {
       setError('Failed to add skill.')
     } finally {
@@ -84,18 +92,26 @@ export function SkillsSection({ initialData }: Props) {
             placeholder="Skill name"
             className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
           />
-          <input
+          <select
             value={newCategory}
             onChange={(e) => setNewCategory(e.target.value)}
-            placeholder="Category"
-            list="existing-categories"
-            className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-36"
-          />
-          <datalist id="existing-categories">
+            className="border border-gray-300 rounded px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 w-36"
+          >
             {categories.map((c) => (
-              <option key={c} value={c} />
+              <option key={c} value={c}>{c}</option>
             ))}
-          </datalist>
+            {!categories.includes('General') && <option value="General">General</option>}
+            <option value="__new__">New category…</option>
+          </select>
+          {newCategory === '__new__' && (
+            <input
+              value={customCategory}
+              onChange={(e) => setCustomCategory(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Category name"
+              className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-36"
+            />
+          )}
           <button
             onClick={addSkill}
             disabled={adding || !newName.trim()}

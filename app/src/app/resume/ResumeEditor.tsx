@@ -46,21 +46,21 @@ export function ResumeEditor({ initialData }: { initialData: FullResume }) {
         </nav>
       </div>
 
-      {activeTab === 'personal' && (
+      <div className={activeTab === 'personal' ? '' : 'hidden'}>
         <PersonalInfoSection initialData={initialData.personalInfo} />
-      )}
-      {activeTab === 'work' && (
+      </div>
+      <div className={activeTab === 'work' ? '' : 'hidden'}>
         <WorkExperienceSection initialData={initialData.workExperiences} />
-      )}
-      {activeTab === 'skills' && (
+      </div>
+      <div className={activeTab === 'skills' ? '' : 'hidden'}>
         <SkillsSection initialData={initialData.skills} />
-      )}
-      {activeTab === 'education' && (
+      </div>
+      <div className={activeTab === 'education' ? '' : 'hidden'}>
         <EducationSection initialData={initialData.education} />
-      )}
-      {activeTab === 'projects' && (
+      </div>
+      <div className={activeTab === 'projects' ? '' : 'hidden'}>
         <ProjectsSection initialData={initialData.projects} />
-      )}
+      </div>
     </div>
   )
 }

@@ -65,6 +65,7 @@ model Project {
   description    String?
   bullets        String[]
   url            String?
+  status         String?
   sortOrder      Int          @default(0)
   masterResumeId String
   masterResume   MasterResume @relation(fields: [masterResumeId], references: [id], onDelete: Cascade)

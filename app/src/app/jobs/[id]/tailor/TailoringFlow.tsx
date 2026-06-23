@@ -60,7 +60,10 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobApplicationId: job.id }),
       })
-      if (!res.ok) throw new Error('Gap analysis failed')
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? 'Gap analysis failed')
+      }
       const result: GapAnalysisResult = await res.json()
       setAnalysisResult(result)
       setGapIndex(0)
@@ -146,7 +149,10 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
           gapAnswers: answersOverride ?? answers,
         }),
       })
-      if (!res.ok) throw new Error('Tailoring failed')
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? 'Tailoring failed')
+      }
       const data: { tailoredSections: TailoredSections } = await res.json()
       setTailoredSections(data.tailoredSections)
       setStep('result')

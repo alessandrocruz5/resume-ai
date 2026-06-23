@@ -35,12 +35,15 @@ export interface Education {
   masterResumeId: string
 }
 
+export type ProjectStatus = 'in progress' | 'in production' | 'beta testing' | 'proof of concept'
+
 export interface Project {
   id: string
   name: string
   description: string | null
   bullets: string[]
   url: string | null
+  status: ProjectStatus | null
   sortOrder: number
   masterResumeId: string
 }

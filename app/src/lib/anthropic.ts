@@ -21,3 +21,24 @@ export function parseJSON<T>(raw: string): T {
   const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
   return JSON.parse(stripped) as T
 }
+
+/** Call the model and parse its JSON response, retrying up to `maxAttempts` times on parse failure. */
+export async function callAI<T>(
+  messages: { role: 'system' | 'user'; content: string }[],
+  maxAttempts = 3,
+): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const completion = await ai.chat.completions.create({
+      model: OLLAMA_MODEL,
+      messages,
+    })
+    const text = completion.choices[0].message.content ?? ''
+    try {
+      return parseJSON<T>(text)
+    } catch (e) {
+      lastError = e
+    }
+  }
+  throw lastError
+}
