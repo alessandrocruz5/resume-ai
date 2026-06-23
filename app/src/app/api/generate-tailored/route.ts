@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getOrCreateResume } from '@/lib/resume'
-import { anthropic, RESUME_WRITER_SYSTEM_PROMPT } from '@/lib/anthropic'
+import { ai, OLLAMA_MODEL, RESUME_WRITER_SYSTEM_PROMPT, parseJSON } from '@/lib/anthropic'
 import { GapAnswer, TailoredSections } from '@/types/jobs'
 
 export async function POST(req: NextRequest) {
@@ -37,7 +37,7 @@ ${job.companyContextText ?? 'Not provided'}
 Added Experiences from gap-filling:
 ${JSON.stringify(gapAnswers.filter((a) => a.bullets.length > 0), null, 2)}
 
-Respond with JSON only — no markdown fences, exactly this schema:
+Respond with this JSON object and nothing else:
 {
   "tailoredSections": {
     "personalInfo": { "name": "", "email": "", "phone": null, "linkedin": null, "location": null },
@@ -51,16 +51,16 @@ Respond with JSON only — no markdown fences, exactly this schema:
   "addedExperiences": [{ "skill": "", "context": "", "userDescription": "", "bullets": [] }]
 }`
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
-    system: RESUME_WRITER_SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: prompt }],
+  const completion = await ai.chat.completions.create({
+    model: OLLAMA_MODEL,
+    messages: [
+      { role: 'system', content: RESUME_WRITER_SYSTEM_PROMPT },
+      { role: 'user', content: prompt },
+    ],
   })
 
-  const text = message.content[0].type === 'text' ? message.content[0].text : ''
-  const result: { tailoredSections: TailoredSections; addedExperiences: GapAnswer[] } =
-    JSON.parse(text)
+  const text = completion.choices[0].message.content ?? ''
+  const result = parseJSON<{ tailoredSections: TailoredSections; addedExperiences: GapAnswer[] }>(text)
 
   return NextResponse.json(result)
 }
