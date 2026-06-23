@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Gap, GapAnalysisResult, GapAnswer, TailoredSections } from '@/types/jobs'
+import { AtsKeywordReport, Gap, GapAnalysisResult, GapAnswer, TailoredSections } from '@/types/jobs'
 
 type Step = 'idle' | 'analyzing' | 'gap-filling' | 'generating' | 'result'
 
@@ -42,6 +42,14 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
   const [savedId, setSavedId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveLabel, setSaveLabel] = useState('')
+  const [savedAtsScore, setSavedAtsScore] = useState<number | null>(null)
+  const [savedAtsReport, setSavedAtsReport] = useState<AtsKeywordReport | null>(null)
+
+  // Cover letter
+  const [coverLetter, setCoverLetter] = useState<string | null>(null)
+  const [generatingCoverLetter, setGeneratingCoverLetter] = useState(false)
+  const [showCoverLetter, setShowCoverLetter] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   async function runGapAnalysis() {
     setStep('analyzing')
@@ -162,8 +170,42 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
     })
     const saved = await res.json()
     setSavedId(saved.id)
+    setSavedAtsScore(saved.atsScore ?? null)
+    setSavedAtsReport(saved.atsKeywordReport ?? null)
     setSaving(false)
     router.refresh()
+  }
+
+  async function generateCoverLetter() {
+    if (!savedId) return
+    setGeneratingCoverLetter(true)
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/cover-letters`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tailoredResumeId: savedId }),
+      })
+      const data = await res.json()
+      setCoverLetter(data.content)
+      setShowCoverLetter(true)
+    } catch {
+      // silently fail
+    } finally {
+      setGeneratingCoverLetter(false)
+    }
+  }
+
+  async function copyToClipboard() {
+    if (!coverLetter) return
+    await navigator.clipboard.writeText(coverLetter)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  function atsScoreColor(score: number) {
+    if (score >= 80) return 'text-green-600'
+    if (score >= 60) return 'text-yellow-600'
+    return 'text-red-500'
   }
 
   return (
@@ -187,18 +229,15 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
           <div className="space-y-2">
             {job.tailoredResumes.map((r) => (
               <div key={r.id} className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">{r.label ?? 'Untitled version'}</span>
+                <a
+                  href={`/jobs/${job.id}/resumes/${r.id}`}
+                  className="text-gray-600 hover:text-blue-600 hover:underline"
+                >
+                  {r.label ?? 'Untitled version'}
+                </a>
                 <div className="flex items-center gap-3">
                   {r.atsScore !== null && (
-                    <span
-                      className={`font-semibold ${
-                        r.atsScore >= 80
-                          ? 'text-green-600'
-                          : r.atsScore >= 60
-                          ? 'text-yellow-600'
-                          : 'text-red-500'
-                      }`}
-                    >
+                    <span className={`font-semibold ${atsScoreColor(r.atsScore)}`}>
                       ATS {r.atsScore}
                     </span>
                   )}
@@ -216,7 +255,8 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
       {step === 'idle' && (
         <div className="bg-white border border-gray-200 rounded-xl p-6 text-center">
           <p className="text-gray-600 mb-4 text-sm">
-            Claude will analyze gaps between your master resume and this job description, then help you fill them.
+            AI will analyze gaps between your master resume and this job description, then help you
+            fill them.
           </p>
           <button
             onClick={runGapAnalysis}
@@ -231,7 +271,9 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
       {step === 'analyzing' && (
         <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
           <div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
-          <p className="text-gray-600 text-sm">Analyzing gaps between your resume and the job description...</p>
+          <p className="text-gray-600 text-sm">
+            Analyzing gaps between your resume and the job description...
+          </p>
         </div>
       )}
 
@@ -241,10 +283,15 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
           {/* Matched skills summary */}
           {analysisResult.matched.length > 0 && gapIndex === 0 && (
             <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-              <p className="text-sm font-medium text-green-800 mb-2">Already demonstrated in your resume</p>
+              <p className="text-sm font-medium text-green-800 mb-2">
+                Already demonstrated in your resume
+              </p>
               <div className="flex flex-wrap gap-2">
                 {analysisResult.matched.map((m) => (
-                  <span key={m} className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full">
+                  <span
+                    key={m}
+                    className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full"
+                  >
                     {m}
                   </span>
                 ))}
@@ -289,7 +336,9 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
 
               {currentBullets.length > 0 && (
                 <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs font-medium text-blue-800 mb-2">Generated bullets — edit if needed:</p>
+                  <p className="text-xs font-medium text-blue-800 mb-2">
+                    Generated bullets — edit if needed:
+                  </p>
                   <ul className="space-y-2">
                     {currentBullets.map((b, i) => (
                       <li key={i} className="text-sm text-blue-900 flex gap-2">
@@ -307,7 +356,11 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
                   disabled={!currentDesc.trim() || fillingBullets}
                   className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
                 >
-                  {fillingBullets ? 'Writing bullets...' : currentBullets.length > 0 ? 'Regenerate' : 'Write Bullets'}
+                  {fillingBullets
+                    ? 'Writing bullets...'
+                    : currentBullets.length > 0
+                    ? 'Regenerate'
+                    : 'Write Bullets'}
                 </button>
                 {currentBullets.length > 0 && (
                   <button
@@ -333,7 +386,7 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
       {step === 'generating' && (
         <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
           <div className="inline-block w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
-          <p className="text-gray-600 text-sm">Claude is writing your tailored resume...</p>
+          <p className="text-gray-600 text-sm">Writing your tailored resume...</p>
         </div>
       )}
 
@@ -347,10 +400,18 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
             <div className="mb-6 pb-4 border-b border-gray-100">
               <p className="font-bold text-gray-900 text-xl">{tailoredSections.personalInfo.name}</p>
               <div className="flex flex-wrap gap-3 text-sm text-gray-500 mt-1">
-                {tailoredSections.personalInfo.email && <span>{tailoredSections.personalInfo.email}</span>}
-                {tailoredSections.personalInfo.phone && <span>{tailoredSections.personalInfo.phone}</span>}
-                {tailoredSections.personalInfo.linkedin && <span>{tailoredSections.personalInfo.linkedin}</span>}
-                {tailoredSections.personalInfo.location && <span>{tailoredSections.personalInfo.location}</span>}
+                {tailoredSections.personalInfo.email && (
+                  <span>{tailoredSections.personalInfo.email}</span>
+                )}
+                {tailoredSections.personalInfo.phone && (
+                  <span>{tailoredSections.personalInfo.phone}</span>
+                )}
+                {tailoredSections.personalInfo.linkedin && (
+                  <span>{tailoredSections.personalInfo.linkedin}</span>
+                )}
+                {tailoredSections.personalInfo.location && (
+                  <span>{tailoredSections.personalInfo.location}</span>
+                )}
               </div>
             </div>
 
@@ -385,7 +446,9 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
             {/* Skills */}
             {tailoredSections.skills.length > 0 && (
               <div className="mb-6">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Skills</h3>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                  Skills
+                </h3>
                 {Object.entries(
                   tailoredSections.skills.reduce<Record<string, string[]>>((acc, s) => {
                     acc[s.category] = [...(acc[s.category] ?? []), s.name]
@@ -403,7 +466,9 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
             {/* Education */}
             {tailoredSections.education.length > 0 && (
               <div className="mb-6">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Education</h3>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                  Education
+                </h3>
                 {tailoredSections.education.map((e, i) => (
                   <div key={i} className="mb-2">
                     <p className="font-semibold text-gray-900 text-sm">{e.degree}</p>
@@ -416,7 +481,9 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
             {/* Projects */}
             {tailoredSections.projects.length > 0 && (
               <div>
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Projects</h3>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                  Projects
+                </h3>
                 {tailoredSections.projects.map((p, i) => (
                   <div key={i} className="mb-3">
                     <p className="font-semibold text-gray-900 text-sm">{p.name}</p>
@@ -435,10 +502,106 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
             )}
           </div>
 
-          {/* Save */}
+          {/* Save / post-save actions */}
           {savedId ? (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
-              Version saved. Start a new tailoring session to generate another version.
+            <div className="space-y-4">
+              {/* ATS Score card */}
+              {savedAtsScore !== null && (
+                <div className="bg-white border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-medium text-gray-700">ATS Score</p>
+                    <span className={`text-2xl font-bold ${atsScoreColor(savedAtsScore)}`}>
+                      {savedAtsScore}/100
+                    </span>
+                  </div>
+                  {savedAtsReport && (
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      {savedAtsReport.matched.length > 0 && (
+                        <div>
+                          <p className="font-medium text-green-700 mb-1">Matched</p>
+                          <div className="flex flex-wrap gap-1">
+                            {savedAtsReport.matched.map((k) => (
+                              <span
+                                key={k}
+                                className="px-1.5 py-0.5 bg-green-50 text-green-700 rounded"
+                              >
+                                {k}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {savedAtsReport.missing.length > 0 && (
+                        <div>
+                          <p className="font-medium text-red-600 mb-1">Missing</p>
+                          <div className="flex flex-wrap gap-1">
+                            {savedAtsReport.missing.map((k) => (
+                              <span
+                                key={k}
+                                className="px-1.5 py-0.5 bg-red-50 text-red-600 rounded"
+                              >
+                                {k}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 flex-wrap">
+                <a
+                  href={`/jobs/${job.id}/resumes/${savedId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  Export (PDF / DOCX)
+                </a>
+                <button
+                  onClick={generateCoverLetter}
+                  disabled={generatingCoverLetter}
+                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  {generatingCoverLetter ? 'Writing...' : coverLetter ? 'Regenerate Cover Letter' : 'Generate Cover Letter'}
+                </button>
+                <button
+                  onClick={() => {
+                    setStep('idle')
+                    setAnalysisResult(null)
+                    setTailoredSections(null)
+                    setSavedId(null)
+                    setSavedAtsScore(null)
+                    setSavedAtsReport(null)
+                    setCoverLetter(null)
+                    setShowCoverLetter(false)
+                  }}
+                  className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  Start Over
+                </button>
+              </div>
+
+              {/* Cover letter */}
+              {coverLetter && showCoverLetter && (
+                <div className="bg-white border border-gray-200 rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-medium text-gray-700">Cover Letter</p>
+                    <button
+                      onClick={copyToClipboard}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      {copied ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                  <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">
+                    {coverLetter}
+                  </pre>
+                </div>
+              )}
             </div>
           ) : (
             <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3">
@@ -453,14 +616,13 @@ export function TailoringFlow({ job }: { job: JobWithResumes }) {
                 disabled={saving}
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
               >
-                {saving ? 'Saving...' : 'Save Version'}
+                {saving ? 'Scoring & Saving...' : 'Save Version'}
               </button>
               <button
                 onClick={() => {
                   setStep('idle')
                   setAnalysisResult(null)
                   setTailoredSections(null)
-                  setSavedId(null)
                 }}
                 className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors whitespace-nowrap"
               >
