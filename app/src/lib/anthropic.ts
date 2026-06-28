@@ -11,14 +11,21 @@ export const ai =
 
 if (process.env.NODE_ENV !== 'production') globalForAI.ai = ai
 
-export const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'llama3.2'
+export const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'qwen3:30b-a3b'
 
+// `/no_think` is Qwen3's soft switch to skip its reasoning pass — we want fast,
+// schema-only JSON here, not a chain of thought.
 export const RESUME_WRITER_SYSTEM_PROMPT =
-  'You are a professional resume writer who writes concise, keyword-rich, STAR-format bullets. You always respond with valid JSON matching the exact schema requested. Never include markdown code fences or any text outside the JSON object.'
+  'You are a professional resume writer who writes concise, keyword-rich, STAR-format bullets. You always respond with valid JSON matching the exact schema requested. Never include markdown code fences or any text outside the JSON object. /no_think'
 
-/** Strip markdown code fences that local models sometimes emit despite instructions. */
+/** Strip Qwen3 reasoning blocks and markdown code fences that local models emit despite instructions. */
 export function parseJSON<T>(raw: string): T {
-  const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
+  const stripped = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/, '')
+    .trim()
   return JSON.parse(stripped) as T
 }
 
